@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小朋友下樓梯 (NS-Shaft Web)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="600" height="800"></canvas>
+        <div id="ui-layer">
+            <div id="score-board">
+                <span>地下 <span id="floor-count">0</span> 層</span>
+            </div>
+            <div id="hp-bar">
+                <div id="hp-fill"></div>
+            </div>
+            <div id="start-screen" class="screen active">
+                <h1>小朋友下樓梯</h1>
+                <p>選擇難度開始遊戲</p>
+                <div class="difficulty-buttons">
+                    <button onclick="startGame('easy')">簡單</button>
+                    <button onclick="startGame('normal')">普通</button>
+                    <button onclick="startGame('hard')">困難</button>
+                </div>
+                <p style="margin-top: 20px; font-size: 16px;">使用 <strong>← →</strong> 移動</p>
+            </div>
+            <div id="game-over-screen" class="screen">
+                <h1>GAME OVER</h1>
+                <p>你到達了地下 <span id="final-score">0</span> 層</p>
+                <button id="restart-btn">回到主選單</button>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>

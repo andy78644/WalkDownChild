@@ -39,7 +39,11 @@
 1.  註冊 [Vercel](https://vercel.com/)。
 2.  安裝 Vercel CLI (`npm i -g vercel`) 或直接在網頁上操作。
 3.  將專案資料夾拖曳到 Vercel Dashboard，或是使用 CLI 輸入 `vercel` 指令。
-4.  它會自動偵測並提供一個 `.vercel.app` 的網址。
+4.  **設定選項**：
+    -   **Framework Preset**: 選擇 `Other` 或 `None` (因為這是純靜態網頁，不需要框架設定)。
+    -   **Build Command**: 留空。
+    -   **Output Directory**: 留空 (或是預設)。
+5.  點擊 **Deploy**，它會自動偵測並提供一個 `.vercel.app` 的網址。
 
 ### 3. Netlify
 類似 Vercel，非常簡單：
@@ -49,3 +53,13 @@
 
 ### 4. 直接開啟
 由於這是純靜態網頁，你也可以直接雙擊 `index.html` 在瀏覽器中遊玩（僅限本機）。
+
+## 常見問題 (Troubleshooting)
+
+### 部署後出現 404 錯誤？
+這通常是因為 Vercel 找不到 `index.html` 檔案。請檢查以下設定：
+
+1.  **Root Directory (根目錄)**：
+    -   如果你是將整個專案資料夾上傳，確保 `index.html` 就在最外層。
+    -   如果你是透過 Git 部署，且檔案在子資料夾內（例如 `game/下樓梯`），你需要到 Vercel 的 **Settings** > **General** > **Root Directory**，輸入檔案所在的資料夾路徑（例如 `game/下樓梯`）。
+2.  **檔案名稱**：確保主檔案名稱是 `index.html`（全小寫）。
