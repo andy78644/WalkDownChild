@@ -387,3 +387,36 @@ restartBtn.addEventListener('click', () => {
     // Reset game state but don't start yet
     gameRunning = false;
 });
+
+// Mobile Controls
+const btnLeft = document.getElementById('btn-left');
+const btnRight = document.getElementById('btn-right');
+
+const handleLeftStart = (e) => {
+    e.preventDefault();
+    keys.ArrowLeft = true;
+};
+const handleLeftEnd = (e) => {
+    e.preventDefault();
+    keys.ArrowLeft = false;
+};
+const handleRightStart = (e) => {
+    e.preventDefault();
+    keys.ArrowRight = true;
+};
+const handleRightEnd = (e) => {
+    e.preventDefault();
+    keys.ArrowRight = false;
+};
+
+btnLeft.addEventListener('touchstart', handleLeftStart, { passive: false });
+btnLeft.addEventListener('touchend', handleLeftEnd, { passive: false });
+btnLeft.addEventListener('mousedown', handleLeftStart);
+btnLeft.addEventListener('mouseup', handleLeftEnd);
+btnLeft.addEventListener('mouseleave', handleLeftEnd);
+
+btnRight.addEventListener('touchstart', handleRightStart, { passive: false });
+btnRight.addEventListener('touchend', handleRightEnd, { passive: false });
+btnRight.addEventListener('mousedown', handleRightStart);
+btnRight.addEventListener('mouseup', handleRightEnd);
+btnRight.addEventListener('mouseleave', handleRightEnd);
