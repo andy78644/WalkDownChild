@@ -4,12 +4,31 @@ const ctx = canvas.getContext('2d');
 // Game Constants
 const GAME_WIDTH = 600;
 const GAME_HEIGHT = 800;
-const GRAVITY = 0.2; // Reduced from 0.4
-const MAX_FALL_SPEED = 6; // Cap falling speed
-const PLAYER_SPEED = 4; // Reduced from 5
-const JUMP_FORCE = -8; // For spring
-let PLATFORM_SPEED_INITIAL = 2;
-let PLATFORM_SPAWN_INTERVAL = 100; // Frames
+// Physics constants scaled for Delta Time (pixels per second)
+// Original: 0.2 per frame * 60 = 12
+const GRAVITY = 1200; // Increased to feel right with dt (0.2 * 60 * 60 approx, tuned by feel)
+// Actually, let's stick to the math: 0.2 px/frame^2.
+// In dt, y += vy * dt. vy += gravity * dt.
+// So gravity units are px/s^2.
+// 0.2 px/frame * 60 frame/s = 12 px/s per frame? No.
+// Velocity increase per second = 0.2 * 60 = 12 px/s.
+// Wait, if gravity is 0.2 per frame, after 1 second (60 frames), velocity is 12.
+// So GRAVITY should be 12? Let's try.
+// Actually, usually gravity is much higher in px/s^2.
+// Let's look at previous values:
+// GRAVITY = 0.2 (per frame)
+// MAX_FALL_SPEED = 6 (per frame) -> 360 px/s
+// PLAYER_SPEED = 4 (per frame) -> 240 px/s
+// JUMP_FORCE = -8 (per frame) -> -480 px/s
+// PLATFORM_SPEED_INITIAL = 2 (per frame) -> 120 px/s
+
+const GRAVITY_PER_SECOND = 800; // Tuned value
+const MAX_FALL_SPEED_PPS = 400;
+const PLAYER_SPEED_PPS = 240;
+const JUMP_FORCE_PPS = -500;
+let PLATFORM_SPEED_INITIAL_PPS = 100;
+let PLATFORM_SPAWN_INTERVAL_SEC = 1.5; // Seconds
+
 const MAX_HP = 12;
 
 // DOM Elements
@@ -23,9 +42,10 @@ const restartBtn = document.getElementById('restart-btn');
 // Game State
 let gameRunning = false;
 let score = 0;
-let totalDistance = 0; // Track total distance for score
-let frames = 0;
-let platformSpeed = PLATFORM_SPEED_INITIAL;
+let totalDistance = 0;
+let lastTime = 0;
+let spawnTimer = 0;
+let platformSpeed = PLATFORM_SPEED_INITIAL_PPS;
 let platforms = [];
 let keys = { ArrowLeft: false, ArrowRight: false };
 let currentDifficulty = 'normal';
@@ -64,43 +84,43 @@ class Player {
         this.invincible = 0; // Frames of invincibility after damage
     }
 
-    update() {
+    update(dt) {
         // Horizontal Movement
         this.vx = 0;
         if (keys.ArrowLeft) {
-            this.vx -= PLAYER_SPEED;
+            this.vx -= PLAYER_SPEED_PPS;
         }
         if (keys.ArrowRight) {
-            this.vx += PLAYER_SPEED;
+            this.vx += PLAYER_SPEED_PPS;
         }
 
         // Apply conveyor effect if on ground
         if (this.onGround && this.currentPlatform) {
             if (this.currentPlatform.type === PLATFORM_TYPES.CONVEYOR_LEFT) {
-                this.vx -= 2; // Base conveyor speed
+                this.vx -= 120; // Base conveyor speed (2 * 60)
             } else if (this.currentPlatform.type === PLATFORM_TYPES.CONVEYOR_RIGHT) {
-                this.vx += 2; // Base conveyor speed
+                this.vx += 120; // Base conveyor speed
             }
         }
 
-        this.x += this.vx;
+        this.x += this.vx * dt;
 
         // Wall collision
         if (this.x < 0) this.x = 0;
         if (this.x + this.width > GAME_WIDTH) this.x = GAME_WIDTH - this.width;
 
         // Gravity
-        this.vy += GRAVITY;
-        if (this.vy > MAX_FALL_SPEED) {
-            this.vy = MAX_FALL_SPEED;
+        this.vy += GRAVITY_PER_SECOND * dt;
+        if (this.vy > MAX_FALL_SPEED_PPS) {
+            this.vy = MAX_FALL_SPEED_PPS;
         }
-        this.y += this.vy;
+        this.y += this.vy * dt;
 
         // Ceiling collision (Spikes at top)
         if (this.y < 0) {
             this.y = 0;
             this.vy = 0;
-            this.takeDamage(5); // Hit ceiling spikes (Increased from 5, kept same but high enough)
+            this.takeDamage(5);
         }
 
         // Floor collision (Game Over)
@@ -113,7 +133,7 @@ class Player {
         // We only check collision if falling down
         if (this.vy > 0) {
             for (let platform of platforms) {
-                if (!platform.active) continue; // Skip inactive platforms (Fake ones that disappeared)
+                if (!platform.active) continue; // Skip inactive platforms
                 if (
                     this.x < platform.x + platform.width &&
                     this.x + this.width > platform.x &&
@@ -131,14 +151,18 @@ class Player {
             }
         }
 
-        // Removed old conveyor logic block from here as it's now in the beginning of update()
-
-        // Invincibility frame reduction
-        if (this.invincible > 0) this.invincible--;
+        // Invincibility timer reduction
+        if (this.invincible > 0) {
+            this.invincible -= dt;
+            if (this.invincible < 0) this.invincible = 0;
+        }
     }
 
     draw() {
-        ctx.fillStyle = this.invincible > 0 && Math.floor(frames / 5) % 2 === 0 ? 'rgba(255, 255, 0, 0.5)' : '#ffcc00';
+        // Blink effect: visible if not invincible OR if (invincible time * 10) % 2 is > 1 (flicker)
+        // Simple flicker: Math.floor(this.invincible * 10) % 2
+        const isFlickering = this.invincible > 0 && Math.floor(this.invincible * 10) % 2 === 0;
+        ctx.fillStyle = isFlickering ? 'rgba(255, 255, 0, 0.5)' : '#ffcc00';
         ctx.fillRect(this.x, this.y, this.width, this.height);
 
         // Eyes
@@ -156,7 +180,7 @@ class Player {
     takeDamage(amount) {
         if (this.invincible > 0) return;
         this.hp -= amount;
-        this.invincible = 60; // 1 second invincibility
+        this.invincible = 1.0; // 1 second invincibility
         updateHP();
         if (this.hp <= 0) {
             gameOver();
@@ -192,8 +216,8 @@ class Platform {
         return PLATFORM_TYPES.SPRING;
     }
 
-    update() {
-        this.y += this.speed;
+    update(dt) {
+        this.y += this.speed * dt;
     }
 
     draw() {
@@ -241,7 +265,7 @@ class Platform {
             player.onGround = false; // Fall through immediately
             player.currentPlatform = null;
         } else if (this.type === PLATFORM_TYPES.SPRING) {
-            player.vy = JUMP_FORCE;
+            player.vy = JUMP_FORCE_PPS;
             player.heal(0.05); // Reduced from 1
         }
     }
@@ -255,14 +279,14 @@ window.startGame = function (difficulty) {
 
     // Set parameters based on difficulty
     if (difficulty === 'easy') {
-        PLATFORM_SPEED_INITIAL = 1.2; // Reduced from 1.5
-        PLATFORM_SPAWN_INTERVAL = 130;
+        PLATFORM_SPEED_INITIAL_PPS = 72; // 1.2 * 60
+        PLATFORM_SPAWN_INTERVAL_SEC = 2.1; // 130 frames / 60 roughly
     } else if (difficulty === 'normal') {
-        PLATFORM_SPEED_INITIAL = 1.8; // Reduced from 2
-        PLATFORM_SPAWN_INTERVAL = 110;
+        PLATFORM_SPEED_INITIAL_PPS = 108; // 1.8 * 60
+        PLATFORM_SPAWN_INTERVAL_SEC = 1.8; // 110 frames / 60 roughly
     } else if (difficulty === 'hard') {
-        PLATFORM_SPEED_INITIAL = 2.5; // Reduced from 3
-        PLATFORM_SPAWN_INTERVAL = 90;
+        PLATFORM_SPEED_INITIAL_PPS = 150; // 2.5 * 60
+        PLATFORM_SPAWN_INTERVAL_SEC = 1.5; // 90 frames / 60 roughly
     }
 
     initGame();
@@ -273,8 +297,9 @@ function initGame() {
     platforms = [];
     score = 0;
     totalDistance = 0;
-    frames = 0;
-    platformSpeed = PLATFORM_SPEED_INITIAL;
+    lastTime = performance.now();
+    spawnTimer = 0;
+    platformSpeed = PLATFORM_SPEED_INITIAL_PPS;
     gameRunning = true;
 
     // Initial platforms
@@ -292,8 +317,17 @@ function initGame() {
     requestAnimationFrame(gameLoop);
 }
 
-function gameLoop() {
+function gameLoop(timestamp) {
     if (!gameRunning) return;
+
+    const dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+
+    // Limit dt to avoid huge jumps if tab is inactive
+    if (dt > 0.1) {
+        requestAnimationFrame(gameLoop);
+        return;
+    }
 
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
@@ -309,18 +343,20 @@ function gameLoop() {
 
     // Update and Draw Platforms
     // Update score based on distance
-    totalDistance += platformSpeed;
+    totalDistance += platformSpeed * dt;
     score = Math.floor(totalDistance / 200); // 1 floor per 200 pixels
     scoreEl.innerText = score;
 
-    if (frames % PLATFORM_SPAWN_INTERVAL === 0) {
+    spawnTimer += dt;
+    if (spawnTimer >= PLATFORM_SPAWN_INTERVAL_SEC) {
+        spawnTimer = 0;
         platforms.push(new Platform(GAME_HEIGHT));
 
         // Increase difficulty slower
         if (score > 0 && score % 20 === 0) { // Check score for difficulty
             // Cap max speed
-            if (platformSpeed < 5) {
-                platformSpeed += 0.1;
+            if (platformSpeed < 300) { // 5 * 60
+                platformSpeed += 6; // 0.1 * 60
             }
         }
     }
@@ -328,7 +364,7 @@ function gameLoop() {
     for (let i = platforms.length - 1; i >= 0; i--) {
         let p = platforms[i];
         p.speed = -platformSpeed;
-        p.update();
+        p.update(dt);
         p.draw();
 
         if (p.y < -20) {
@@ -337,10 +373,9 @@ function gameLoop() {
     }
 
     // Update and Draw Player
-    player.update();
+    player.update(dt);
     player.draw();
 
-    frames++;
     requestAnimationFrame(gameLoop);
 }
 
